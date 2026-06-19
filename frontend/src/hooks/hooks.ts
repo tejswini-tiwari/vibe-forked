@@ -5898,6 +5898,7 @@ export interface MyBooking {
   kind?: string;
   status?: string;
   hoursReserved?: number;
+  fulfilledAt?: string;
 }
 
 // IST "today" as YYYY-MM-DD — matches the backend's getCurrentISTDate so the

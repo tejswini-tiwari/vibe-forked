@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Clock, Users, Loader2, Check } from "lucide-react";
+import { Clock, Users, Loader2, Check, Gift } from "lucide-react";
 import {
   useGetTimeSlots,
   useMyBookings,
@@ -95,12 +95,26 @@ export default function StudentTimeslotModal({
     refetchAvailability();
   };
 
-  const allowance = (timeSlotsData as { dailyBaseAllowance?: number } | null | undefined)
-    ?.dailyBaseAllowance ?? 1;
+  const tsSettings = timeSlotsData as
+    | { dailyBaseAllowance?: number; bonusOnFulfillment?: boolean }
+    | null
+    | undefined;
+  const baseAllowance = tsSettings?.dailyBaseAllowance ?? 1;
+  const bonusEnabled = !!tsSettings?.bonusOnFulfillment;
   const bookings: MyBooking[] = myBookings ?? [];
   // Allowance is per calendar day the booking is MADE — count bookings created today.
   const today = istToday();
   const bookedCount = bookings.filter(b => (b.bookedOnDate ?? b.date) === today).length;
+  // Bonus: each window FULFILLED today (when bonuses are enabled) grants one
+  // extra booking today — mirrors the backend's effective-allowance math.
+  const istDateOfIso = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const bonusEarnedToday = bonusEnabled
+    ? bookings.filter(
+        b => b.status === 'FULFILLED' && b.fulfilledAt && istDateOfIso(b.fulfilledAt) === today,
+      ).length
+    : 0;
+  const allowance = baseAllowance + bonusEarnedToday;
 
   const bookingFor = (slot: { from: string; to: string }): MyBooking | undefined =>
     bookings.find(b => b.date === activeDate && b.from === slot.from && b.to === slot.to);
@@ -181,11 +195,24 @@ export default function StudentTimeslotModal({
               </Button>
             ))}
           </div>
-          <div className="mt-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs font-medium">
               {bookedCount} of {allowance} booking{allowance !== 1 ? 's' : ''} used today
             </span>
+            {bonusEarnedToday > 0 ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2.5 py-0.5 text-xs font-medium">
+                <Gift className="h-3.5 w-3.5" />
+                +{bonusEarnedToday} bonus earned
+              </span>
+            ) : null}
           </div>
+          {bonusEarnedToday > 0 ? (
+            <p className="mt-1 text-xs text-amber-700">
+              🎉 You stayed active in {bonusEarnedToday} of your booked window
+              {bonusEarnedToday !== 1 ? 's' : ''} today — that earned you{' '}
+              {bonusEarnedToday} extra booking{bonusEarnedToday !== 1 ? 's' : ''}. Book another window below.
+            </p>
+          ) : null}
         </DialogHeader>
 
         <div className="space-y-4">
@@ -234,6 +261,11 @@ export default function StudentTimeslotModal({
                             <span className="flex items-center gap-1 text-xs font-medium text-green-700">
                               <Check className="h-4 w-4" /> Booked
                             </span>
+                            {booked.kind === 'BONUS' ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[11px] font-medium">
+                                <Gift className="h-3 w-3" /> Bonus
+                              </span>
+                            ) : null}
                             <Button
                               size="sm"
                               variant="outline"
@@ -304,6 +336,9 @@ export default function StudentTimeslotModal({
           <div className="text-xs text-muted-foreground space-y-0.5">
             <p>• Booking for a day opens at 9:00 AM IST two days before, and closes at 9:00 AM IST on the day itself.</p>
             <p>• Your booking allowance resets each calendar day — it counts every booking you make today, for any day.</p>
+            {bonusEnabled ? (
+              <p>• Stay active for most of a booked window and you'll earn a bonus booking to use the same day.</p>
+            ) : null}
             <p>• Need a different window? Cancel a booking to free up your allowance, then book another.</p>
             <p>• Access to the course is allowed during a window you've booked.</p>
             <p>• Time slots are in IST (Indian Standard Time, UTC+5:30).</p>
